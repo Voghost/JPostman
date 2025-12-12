@@ -109,7 +109,6 @@ mvn clean compile exec:java
 在已创建的 Collection 中，点击 **"新建请求"**，选择 HTTP 方法并输入 URL。
 
 ### 3. 配置请求
-
 - **请求参数**：在 Params 标签页中添加查询参数，会自动同步到 URL
 - **请求头**：在 Headers 标签页中添加自定义 HTTP 头
 - **请求体**：在 Body 标签页中选择格式并输入内容
