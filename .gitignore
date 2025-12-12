@@ -37,3 +37,23 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Windows ###
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+### JPostman Application Data ###
+# User data directory (uncomment if you want to commit user data)
+.jpostman/
+
+### Logs ###
+logs/
+*.log
+
+### Temporary files ###
+*.tmp
+*.temp
+*.swp
+*.swo
+*~

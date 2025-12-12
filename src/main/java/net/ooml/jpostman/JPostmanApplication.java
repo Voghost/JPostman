@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import java.awt.*;
 
 /**
  * JPostman Application - Main entry point
@@ -74,6 +75,16 @@ public class JPostmanApplication {
 
         // Step 6: Create and show main frame
         MainFrame mainFrame = new MainFrame();
+
+        // Step 7: Register macOS About handler
+        if (OSUtil.isMacOS() && Desktop.isDesktopSupported()) {
+            Desktop desktop = Desktop.getDesktop();
+            if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
+                desktop.setAboutHandler(e -> mainFrame.onAbout());
+                log.info("macOS About handler registered");
+            }
+        }
+
         mainFrame.setVisible(true);
 
         log.info("JPostman started successfully");

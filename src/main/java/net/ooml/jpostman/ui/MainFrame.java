@@ -313,15 +313,41 @@ public class MainFrame extends JFrame {
 
     public void onAbout() {
         log.info("About action");
-        String message = I18nManager.get("app.name") + "\n" +
-                I18nManager.get("app.version") + ": " + Constants.APP_VERSION + "\n" +
-                I18nManager.get("app.description") + "\n\n" +
-                I18nManager.get("about.author") + ": LeifLiu\n" +
-                I18nManager.get("about.email") + ": voghost2@gmail.com\n" +
-                I18nManager.get("about.github") + ": http://github.com/voghost";
+
+        // Create HTML content with clickable links
+        String htmlMessage = "<html><body style='width: 300px; padding: 10px;'>" +
+                "<h2 style='margin: 0;'>" + I18nManager.get("app.name") + "</h2>" +
+                "<p style='margin: 5px 0;'>" + I18nManager.get("app.version") + ": " + Constants.APP_VERSION + "</p>" +
+                "<p style='margin: 5px 0;'>" + I18nManager.get("app.description") + "</p>" +
+                "<br>" +
+                "<p style='margin: 5px 0;'><b>" + I18nManager.get("about.author") + ":</b> LeifLiu</p>" +
+                "<p style='margin: 5px 0;'><b>" + I18nManager.get("about.email") + ":</b> " +
+                "<a href='mailto:voghost2@gmail.com'>voghost2@gmail.com</a></p>" +
+                "<p style='margin: 5px 0;'><b>" + I18nManager.get("about.github") + ":</b> " +
+                "<a href='http://github.com/voghost'>http://github.com/voghost</a></p>" +
+                "</body></html>";
+
+        // Create JEditorPane with HTML content
+        JEditorPane editorPane = new JEditorPane("text/html", htmlMessage);
+        editorPane.setEditable(false);
+        editorPane.setOpaque(false);
+        editorPane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+
+        // Add hyperlink listener to open links in browser
+        editorPane.addHyperlinkListener(e -> {
+            if (e.getEventType() == javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) {
+                try {
+                    if (java.awt.Desktop.isDesktopSupported()) {
+                        java.awt.Desktop.getDesktop().browse(e.getURL().toURI());
+                    }
+                } catch (Exception ex) {
+                    log.error("Failed to open link: " + e.getURL(), ex);
+                }
+            }
+        });
 
         JOptionPane.showMessageDialog(this,
-                message,
+                editorPane,
                 I18nManager.get("menu.help.about"),
                 JOptionPane.INFORMATION_MESSAGE);
     }
