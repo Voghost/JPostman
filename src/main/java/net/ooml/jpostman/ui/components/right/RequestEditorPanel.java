@@ -25,6 +25,9 @@ public class RequestEditorPanel extends JPanel {
     // Current request being edited
     private Request currentRequest;
 
+    // SwingWorker for async requests (to support cancellation)
+    private SwingWorker<Response, Void> currentWorker;
+
     // Flag to prevent circular updates between URL and Params
     private boolean updatingUrlParams = false;
 
@@ -55,6 +58,7 @@ public class RequestEditorPanel extends JPanel {
         configPanel = new RequestConfigPanel(mainFrame);
         configPanel.setSendAction(this::sendRequest);
         configPanel.setSaveAction(this::saveCurrentRequest);
+        configPanel.setCurlAction(this::showCurlDialog);
         topPanel.add(configPanel, BorderLayout.NORTH);
 
         // Request info (ID, created, updated)
@@ -170,12 +174,63 @@ public class RequestEditorPanel extends JPanel {
             // Update info panel to reflect new timestamp
             infoPanel.setRequest(currentRequest);
 
-            log.info("Request saved: {}", currentRequest.getName());
+            // Persist to file if request belongs to a collection
+            if (currentRequest.getCollectionId() != null) {
+                String projectName = mainFrame.getCurrentProject();
+                String collectionId = currentRequest.getCollectionId();
+
+                // Load collection, update it, and save
+                net.ooml.jpostman.model.Collection collection =
+                    mainFrame.getStorageService().loadCollection(projectName, collectionId);
+
+                // Find and update the request in the collection
+                boolean found = false;
+                for (int i = 0; i < collection.getRequests().size(); i++) {
+                    if (collection.getRequests().get(i).getId().equals(currentRequest.getId())) {
+                        collection.getRequests().set(i, currentRequest);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    collection.touch();
+                    mainFrame.getStorageService().saveCollection(projectName, collection);
+                    log.info("Request saved and persisted: {}", currentRequest.getName());
+                } else {
+                    log.warn("Request not found in collection: {}", currentRequest.getId());
+                }
+            }
+
             mainFrame.setStatus(I18nManager.get("status.saved"));
 
         } catch (Exception e) {
             log.error("Failed to save request", e);
             mainFrame.showError("Failed to save request: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Show cURL command dialog
+     */
+    public void showCurlDialog() {
+        try {
+            // First update currentRequest from UI
+            saveCurrentRequest();
+
+            if (currentRequest == null) {
+                mainFrame.showError("No request available");
+                return;
+            }
+
+            // Create and show the dialog
+            net.ooml.jpostman.ui.dialogs.CurlDialog dialog =
+                new net.ooml.jpostman.ui.dialogs.CurlDialog(mainFrame, currentRequest);
+            dialog.setVisible(true);
+
+        } catch (Exception e) {
+            log.error("Failed to show cURL dialog", e);
+            mainFrame.showError("Failed to generate cURL command: " + e.getMessage());
         }
     }
 
@@ -213,7 +268,7 @@ public class RequestEditorPanel extends JPanel {
                 protected void done() {
                     try {
                         Response response = get();
-                        responsePanel.displayResponse(response);
+                        responsePanel.displayResponse(response, currentRequest);
 
                         String statusMsg = String.format("%s - %d %s (%dms)",
                                 I18nManager.get("status.request_complete"),

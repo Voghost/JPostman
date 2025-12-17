@@ -580,4 +580,11 @@ public class RequestListPanel extends JPanel {
         revalidate();
         repaint();
     }
+
+    /**
+     * Get project switcher component
+     */
+    public ProjectSwitcher getProjectSwitcher() {
+        return projectSwitcher;
+    }
 }

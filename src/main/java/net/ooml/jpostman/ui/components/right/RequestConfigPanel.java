@@ -18,6 +18,7 @@ public class RequestConfigPanel extends JPanel {
     private JTextField urlField;
     private JButton sendButton;
     private JButton saveButton;
+    private JButton curlButton;
 
     public RequestConfigPanel(MainFrame mainFrame) {
         this.mainFrame = mainFrame;
@@ -46,12 +47,21 @@ public class RequestConfigPanel extends JPanel {
         // Right panel: Buttons
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
 
+        curlButton = new JButton("cURL");
+        curlButton.addActionListener(e -> onViewCurl());
+        buttonPanel.add(curlButton);
+
         saveButton = new JButton(I18nManager.get("button.save"));
         saveButton.addActionListener(e -> onSave());
         buttonPanel.add(saveButton);
 
         sendButton = new JButton(I18nManager.get("button.send"));
         sendButton.setPreferredSize(new Dimension(80, 30));
+        sendButton.setBackground(new Color(40, 167, 69)); // Green color
+        sendButton.setForeground(Color.WHITE);
+        sendButton.setFocusPainted(false);
+        sendButton.setOpaque(true);
+        sendButton.setBorderPainted(false);
         sendButton.addActionListener(e -> onSend());
         buttonPanel.add(sendButton);
 
@@ -121,6 +131,13 @@ public class RequestConfigPanel extends JPanel {
     }
 
     /**
+     * Handle view cURL button click
+     */
+    private void onViewCurl() {
+        // Will be handled by RequestEditorPanel
+    }
+
+    /**
      * Set send action
      */
     public void setSendAction(Runnable action) {
@@ -138,6 +155,16 @@ public class RequestConfigPanel extends JPanel {
             saveButton.removeActionListener(listener);
         }
         saveButton.addActionListener(e -> action.run());
+    }
+
+    /**
+     * Set cURL action
+     */
+    public void setCurlAction(Runnable action) {
+        for (java.awt.event.ActionListener listener : curlButton.getActionListeners()) {
+            curlButton.removeActionListener(listener);
+        }
+        curlButton.addActionListener(e -> action.run());
     }
 
     /**

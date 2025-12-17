@@ -205,6 +205,17 @@ public class TabbedRequestPanel extends JPanel {
     }
 
     /**
+     * Close all open tabs
+     * Used when switching projects
+     */
+    public void closeAllTabs() {
+        openTabs.clear();
+        tabbedPane.removeAll();
+        showEmptyState();
+        log.info("All tabs closed");
+    }
+
+    /**
      * Update theme for all open tabs
      */
     public void updateTheme() {

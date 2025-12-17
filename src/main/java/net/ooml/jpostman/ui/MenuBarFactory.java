@@ -73,6 +73,33 @@ public class MenuBarFactory {
 
         menu.addSeparator();
 
+        // New Project
+        JMenuItem newProject = new JMenuItem(I18nManager.get("menu.file.new_project"));
+        newProject.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_P,
+                getMenuShortcutKeyMask() | InputEvent.SHIFT_DOWN_MASK));
+        newProject.addActionListener(e -> mainFrame.onNewProject());
+        menu.add(newProject);
+
+        // Switch Project
+        JMenuItem switchProject = new JMenuItem(I18nManager.get("menu.file.switch_project"));
+        switchProject.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_P, getMenuShortcutKeyMask()));
+        switchProject.addActionListener(e -> mainFrame.onSwitchProject());
+        menu.add(switchProject);
+
+        menu.addSeparator();
+
+        // Rename Project
+        JMenuItem renameProject = new JMenuItem(I18nManager.get("menu.file.rename_project"));
+        renameProject.addActionListener(e -> mainFrame.onRenameProject());
+        menu.add(renameProject);
+
+        // Delete Project
+        JMenuItem deleteProject = new JMenuItem(I18nManager.get("menu.file.delete_project"));
+        deleteProject.addActionListener(e -> mainFrame.onDeleteProject());
+        menu.add(deleteProject);
+
+        menu.addSeparator();
+
         // Save
         JMenuItem save = new JMenuItem(I18nManager.get("menu.file.save"));
         save.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, getMenuShortcutKeyMask()));

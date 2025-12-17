@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Storage service for persisting and loading data
@@ -83,6 +85,94 @@ public class StorageService {
      */
     public boolean projectExists(String projectName) {
         return Files.exists(PathConfig.getProjectFile(projectName));
+    }
+
+    /**
+     * List all available projects
+     * Scans the projects directory and returns project names
+     * @return List of project names (sorted)
+     */
+    public List<String> listAllProjects() throws IOException {
+        Path projectsDir = PathConfig.getProjectsDirectory();
+        if (!Files.exists(projectsDir)) {
+            return new ArrayList<>();
+        }
+
+        return Files.list(projectsDir)
+                .filter(Files::isDirectory)
+                .map(path -> path.getFileName().toString())
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Validate project name
+     * Checks if name is valid (alphanumeric, hyphens, underscores)
+     * @param projectName Project name to validate
+     * @return true if valid, false otherwise
+     */
+    public boolean isValidProjectName(String projectName) {
+        if (projectName == null || projectName.trim().isEmpty()) {
+            return false;
+        }
+        // Allow alphanumeric, hyphens, underscores, no spaces
+        return projectName.matches("^[a-zA-Z0-9_-]+$");
+    }
+
+    /**
+     * Delete a project and all its data
+     * Removes the entire project directory
+     * @param projectName Name of project to delete
+     * @return true if deleted, false otherwise
+     */
+    public boolean deleteProject(String projectName) throws IOException {
+        Path projectDir = PathConfig.getProjectDirectory(projectName);
+        if (!Files.exists(projectDir)) {
+            return false;
+        }
+
+        // Delete directory recursively
+        Files.walk(projectDir)
+                .sorted(Comparator.reverseOrder())
+                .forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        log.error("Failed to delete: {}", path, e);
+                    }
+                });
+
+        log.info("Project deleted: {}", projectName);
+        return true;
+    }
+
+    /**
+     * Rename a project
+     * Moves the project directory to a new name
+     * @param oldName Current project name
+     * @param newName New project name
+     */
+    public void renameProject(String oldName, String newName) throws IOException {
+        Path oldDir = PathConfig.getProjectDirectory(oldName);
+        Path newDir = PathConfig.getProjectDirectory(newName);
+
+        if (!Files.exists(oldDir)) {
+            throw new IOException("Project not found: " + oldName);
+        }
+
+        if (Files.exists(newDir)) {
+            throw new IOException("Project already exists: " + newName);
+        }
+
+        Files.move(oldDir, newDir);
+
+        // Update project.json with new name
+        Project project = loadProject(newName);
+        project.setName(newName);
+        project.touch();
+        saveProject(newName, project);
+
+        log.info("Project renamed from {} to {}", oldName, newName);
     }
 
     // ===== Collection Operations =====

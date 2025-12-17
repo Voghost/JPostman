@@ -19,6 +19,7 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Main Frame - Main application window
@@ -29,7 +30,7 @@ public class MainFrame extends JFrame {
     // Services
     private final StorageService storageService;
     private final EnvironmentService environmentService;
-    private final HttpClientService httpClientService;
+    private HttpClientService httpClientService;
     private final AppConfig appConfig;
 
     // UI Components
@@ -77,6 +78,9 @@ public class MainFrame extends JFrame {
         // Set frame size
         setSize(appConfig.getWindowWidth(), appConfig.getWindowHeight());
         setLocationRelativeTo(null);
+
+        // Set application icon
+        setIconImages(loadApplicationIcons());
 
         // Create menu bar
         MenuBarFactory menuBarFactory = new MenuBarFactory(this);
@@ -133,6 +137,38 @@ public class MainFrame extends JFrame {
     }
 
     /**
+     * Load application icons in multiple sizes
+     */
+    private java.util.List<Image> loadApplicationIcons() {
+        java.util.List<Image> icons = new java.util.ArrayList<>();
+        int[] sizes = {16, 32, 48, 64, 128, 256};
+
+        for (int size : sizes) {
+            try {
+                String iconPath = "/icons/jpostman_" + size + ".png";
+                java.net.URL iconURL = getClass().getResource(iconPath);
+                if (iconURL != null) {
+                    ImageIcon icon = new ImageIcon(iconURL);
+                    icons.add(icon.getImage());
+                    log.debug("Loaded icon: {}", iconPath);
+                } else {
+                    log.warn("Icon not found: {}", iconPath);
+                }
+            } catch (Exception e) {
+                log.error("Failed to load icon of size {}", size, e);
+            }
+        }
+
+        if (icons.isEmpty()) {
+            log.warn("No application icons loaded");
+        } else {
+            log.info("Loaded {} application icons", icons.size());
+        }
+
+        return icons;
+    }
+
+    /**
      * Setup macOS specific features
      */
     private void setupMacOS() {
@@ -140,12 +176,21 @@ public class MainFrame extends JFrame {
         System.setProperty("apple.laf.useScreenMenuBar", "true");
         System.setProperty("apple.awt.application.name", I18nManager.get("app.name"));
 
-        // Set dock icon (if available)
+        // Set dock icon
         try {
             Taskbar taskbar = Taskbar.getTaskbar();
-            // Could set dock icon here if we have one
+            // Load the largest icon (256x256) for dock
+            String iconPath = "/icons/jpostman_256.png";
+            java.net.URL iconURL = getClass().getResource(iconPath);
+            if (iconURL != null) {
+                ImageIcon icon = new ImageIcon(iconURL);
+                taskbar.setIconImage(icon.getImage());
+                log.info("Dock icon set successfully");
+            } else {
+                log.warn("Dock icon not found: {}", iconPath);
+            }
         } catch (Exception e) {
-            log.debug("Taskbar not supported on this platform");
+            log.debug("Failed to set dock icon: {}", e.getMessage());
         }
     }
 
@@ -400,5 +445,328 @@ public class MainFrame extends JFrame {
 
     public RequestListPanel getLeftPanel() {
         return leftPanel;
+    }
+
+    // ==================== Project Management ====================
+
+    /**
+     * Switch to a different project
+     * Orchestrates reloading of all project-specific components
+     * @param newProjectName Name of project to switch to
+     */
+    public void switchProject(String newProjectName) {
+        String currentProject = appConfig.getCurrentProject();
+
+        // No-op if switching to same project
+        if (currentProject.equals(newProjectName)) {
+            log.debug("Already on project: {}", newProjectName);
+            return;
+        }
+
+        try {
+            // Verify project exists
+            if (!storageService.projectExists(newProjectName)) {
+                showError(I18nManager.get("error.project_not_found") + ": " + newProjectName);
+                return;
+            }
+
+            log.info("Switching from project '{}' to '{}'", currentProject, newProjectName);
+            setStatus(I18nManager.get("status.switching_project"));
+
+            // Close all open tabs
+            rightPanel.closeAllTabs();
+
+            // Update app config and save
+            appConfig.setCurrentProject(newProjectName);
+            appConfig.save();
+
+            // Reinitialize environment service
+            environmentService.initialize(newProjectName);
+
+            // Recreate HTTP client with new variable resolver
+            httpClientService.shutdown();
+            httpClientService = new HttpClientService(
+                    environmentService.createVariableResolver(),
+                    Constants.DEFAULT_TIMEOUT_MS
+            );
+
+            // Reload collections in left panel
+            leftPanel.loadCollections();
+
+            // Update project switcher dropdown
+            leftPanel.getProjectSwitcher().refresh();
+
+            // Update window title
+            setTitle(I18nManager.get("app.name") + " - " + newProjectName);
+
+            // Update status
+            setStatus(I18nManager.get("status.project_switched") + ": " + newProjectName);
+
+            log.info("Successfully switched to project: {}", newProjectName);
+
+        } catch (IOException e) {
+            log.error("Failed to switch project", e);
+            showError(I18nManager.get("error.switch_project_failed") + ": " + e.getMessage());
+
+            // Attempt to revert to original project
+            try {
+                appConfig.setCurrentProject(currentProject);
+                appConfig.save();
+            } catch (IOException ex) {
+                log.error("Failed to revert project", ex);
+            }
+        }
+    }
+
+    /**
+     * Handler for create new project action
+     */
+    public void onNewProject() {
+        log.info("New project action");
+
+        String projectName = JOptionPane.showInputDialog(
+                this,
+                I18nManager.get("dialog.new_project.message"),
+                I18nManager.get("dialog.new_project.title"),
+                JOptionPane.QUESTION_MESSAGE
+        );
+
+        if (projectName == null || projectName.trim().isEmpty()) {
+            return; // User cancelled or entered empty name
+        }
+
+        projectName = projectName.trim();
+
+        // Validate project name
+        if (!storageService.isValidProjectName(projectName)) {
+            showError(I18nManager.get("error.invalid_project_name"));
+            return;
+        }
+
+        // Check if project already exists
+        if (storageService.projectExists(projectName)) {
+            showError(I18nManager.get("error.project_already_exists") + ": " + projectName);
+            return;
+        }
+
+        try {
+            // Create project
+            storageService.createProject(projectName);
+
+            // Confirm switch
+            int choice = JOptionPane.showConfirmDialog(
+                    this,
+                    I18nManager.get("dialog.new_project.switch_confirm") + " '" + projectName + "'?",
+                    I18nManager.get("dialog.new_project.title"),
+                    JOptionPane.YES_NO_OPTION
+            );
+
+            if (choice == JOptionPane.YES_OPTION) {
+                switchProject(projectName);
+            } else {
+                // Just refresh the project list
+                leftPanel.getProjectSwitcher().refresh();
+            }
+
+        } catch (IOException e) {
+            log.error("Failed to create project", e);
+            showError(I18nManager.get("error.create_project_failed") + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handler for switch project action
+     */
+    public void onSwitchProject() {
+        log.info("Switch project action");
+
+        try {
+            List<String> projects = storageService.listAllProjects();
+
+            if (projects.isEmpty()) {
+                showInfo(I18nManager.get("info.no_projects"));
+                return;
+            }
+
+            // Create combo box with projects
+            String currentProject = appConfig.getCurrentProject();
+            String[] projectArray = projects.toArray(new String[0]);
+
+            String selected = (String) JOptionPane.showInputDialog(
+                    this,
+                    I18nManager.get("dialog.switch_project.message"),
+                    I18nManager.get("dialog.switch_project.title"),
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    projectArray,
+                    currentProject
+            );
+
+            if (selected != null && !selected.equals(currentProject)) {
+                switchProject(selected);
+            }
+
+        } catch (IOException e) {
+            log.error("Failed to list projects", e);
+            showError(I18nManager.get("error.list_projects_failed") + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handler for delete project action
+     */
+    public void onDeleteProject() {
+        log.info("Delete project action");
+
+        try {
+            List<String> projects = storageService.listAllProjects();
+
+            if (projects.isEmpty()) {
+                showInfo(I18nManager.get("info.no_projects"));
+                return;
+            }
+
+            // Cannot delete if only one project exists
+            if (projects.size() == 1) {
+                showError(I18nManager.get("error.cannot_delete_only_project"));
+                return;
+            }
+
+            String currentProject = appConfig.getCurrentProject();
+
+            // Create combo box with projects
+            String[] projectArray = projects.toArray(new String[0]);
+
+            String selected = (String) JOptionPane.showInputDialog(
+                    this,
+                    I18nManager.get("dialog.delete_project.message"),
+                    I18nManager.get("dialog.delete_project.title"),
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    projectArray,
+                    null
+            );
+
+            if (selected == null) {
+                return; // User cancelled
+            }
+
+            // Confirm deletion
+            int confirm = JOptionPane.showConfirmDialog(
+                    this,
+                    I18nManager.get("dialog.delete_project.confirm") + " '" + selected + "'?\n" +
+                            I18nManager.get("dialog.delete_project.warning"),
+                    I18nManager.get("dialog.delete_project.title"),
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
+            }
+
+            // Delete project
+            storageService.deleteProject(selected);
+
+            // If deleting current project, switch to another one
+            if (selected.equals(currentProject)) {
+                projects.remove(selected);
+                if (!projects.isEmpty()) {
+                    String newProject = projects.get(0);
+                    switchProject(newProject);
+                }
+            } else {
+                // Just refresh project list
+                leftPanel.getProjectSwitcher().refresh();
+            }
+
+            showInfo(I18nManager.get("info.project_deleted") + ": " + selected);
+
+        } catch (IOException e) {
+            log.error("Failed to delete project", e);
+            showError(I18nManager.get("error.delete_project_failed") + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handler for rename project action
+     */
+    public void onRenameProject() {
+        log.info("Rename project action");
+
+        try {
+            List<String> projects = storageService.listAllProjects();
+
+            if (projects.isEmpty()) {
+                showInfo(I18nManager.get("info.no_projects"));
+                return;
+            }
+
+            String currentProject = appConfig.getCurrentProject();
+            String[] projectArray = projects.toArray(new String[0]);
+
+            // Select project to rename
+            String selected = (String) JOptionPane.showInputDialog(
+                    this,
+                    I18nManager.get("dialog.rename_project.select_message"),
+                    I18nManager.get("dialog.rename_project.title"),
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    projectArray,
+                    currentProject
+            );
+
+            if (selected == null) {
+                return; // User cancelled
+            }
+
+            // Ask for new name
+            String newName = JOptionPane.showInputDialog(
+                    this,
+                    I18nManager.get("dialog.rename_project.new_name_message"),
+                    I18nManager.get("dialog.rename_project.title"),
+                    JOptionPane.QUESTION_MESSAGE
+            );
+
+            if (newName == null || newName.trim().isEmpty()) {
+                return;
+            }
+
+            newName = newName.trim();
+
+            // Validate new name
+            if (!storageService.isValidProjectName(newName)) {
+                showError(I18nManager.get("error.invalid_project_name"));
+                return;
+            }
+
+            // Check if name already exists
+            if (storageService.projectExists(newName)) {
+                showError(I18nManager.get("error.project_already_exists") + ": " + newName);
+                return;
+            }
+
+            // Rename project
+            storageService.renameProject(selected, newName);
+
+            // If renaming current project, update and reload
+            if (selected.equals(currentProject)) {
+                appConfig.setCurrentProject(newName);
+                appConfig.save();
+
+                // Update UI
+                setTitle(I18nManager.get("app.name") + " - " + newName);
+                leftPanel.getProjectSwitcher().refresh();
+            } else {
+                // Just refresh project list
+                leftPanel.getProjectSwitcher().refresh();
+            }
+
+            showInfo(I18nManager.get("info.project_renamed") + ": " + selected + " → " + newName);
+
+        } catch (IOException e) {
+            log.error("Failed to rename project", e);
+            showError(I18nManager.get("error.rename_project_failed") + ": " + e.getMessage());
+        }
     }
 }

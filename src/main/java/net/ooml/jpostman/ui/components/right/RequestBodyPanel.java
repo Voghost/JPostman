@@ -79,12 +79,12 @@ public class RequestBodyPanel extends JPanel {
         bodyTextPane = new SyntaxHighlightTextPane(SyntaxConstants.SYNTAX_STYLE_JSON);
         contentPanel.add(bodyTextPane, CARD_TEXT);
 
-        // Form data table
-        formDataPanel = new KeyValueTablePanel();
+        // Form data table (disable key autocomplete for form fields)
+        formDataPanel = new KeyValueTablePanel(false);
         contentPanel.add(formDataPanel, "FORM_DATA");
 
-        // URL encoded table
-        urlencodedPanel = new KeyValueTablePanel();
+        // URL encoded table (disable key autocomplete for form fields)
+        urlencodedPanel = new KeyValueTablePanel(false);
         contentPanel.add(urlencodedPanel, "FORM_URLENCODED");
 
         add(contentPanel, BorderLayout.CENTER);
